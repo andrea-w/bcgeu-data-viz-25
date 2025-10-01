@@ -149,7 +149,10 @@ combined_df["pct_increase_salary"] = (
 
 
 # display data
-st.title("Deputy Minister Salary & Expenses Over Time")
+st.title("Deputy Ministers - Salary and Raises compared to Inflation")
+
+st.write("Use the interactive chart below to compare deputy minister salaries and annual raises per year, against inflation (measured as the percent change in the Consumer Price Index in British Columbia).")
+
 # allow user to select exactly 1 metric to plot
 metric = st.radio(
     "Select metric to plot:",
@@ -211,7 +214,7 @@ else:
 
             inflation_chart = (
                 alt.Chart(filtered_inflation_df)
-                .mark_line(point=True, color="black", strokeDash=[4, 2])
+                .mark_tick(color="black", thickness=3)
                 .encode(
                     x=alt.X("Year:O"),
                     y=percent_y,
