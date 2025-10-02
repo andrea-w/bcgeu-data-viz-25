@@ -4,19 +4,6 @@ import pandas as pd
 import altair as alt
 
 
-# # import grid 12 step 1 data
-# grid12_df = pd.read_csv("grid-salary-data/grid12-step1.csv")
-# # calculate percentage increase and add it to dataframe
-# grid12_df = grid12_df.sort_values("YEAR")
-# grid12_df = grid12_df.rename(columns={"YEAR": "year", "ANNUAL_SALARY": "salary"})
-# grid12_df["pct_increase"] = grid12_df["salary"].pct_change() * 100
-
-# grid12_df
-
-# # display grid 12 step 1 salary data
-# st.write('Grid 12 Step 1 Annual Salary by Fiscal Year')
-# grid12_salary_line_chart = st.line_chart(data=grid12_df, y='salary', x_label='Fiscal Year', y_label='Annual Salary')
-
 # import deputy minister salary data
 dm_25_df = pd.read_csv("deputy-ministers-data/fye25-deputy-ministers.csv")
 dm_25_df.set_index('Name', inplace=True)
@@ -37,7 +24,7 @@ dm_18_df.set_index('Name', inplace=True)
 dm_17_df = pd.read_csv("deputy-ministers-data/fye17-deputy-ministers.csv")
 dm_17_df.set_index('Name', inplace=True)
 
-# deputy minister to the premier
+# --------- SALARIES FOR DEPUTY MINISTER TO THE PREMIER ----------------
 dm_to_premier_salaries = {}
 # Nov 2020 - Nov 2022: Lori Wanamaker
 dm_to_premier_salaries['31 Mar 2020'] = {'name': 'Lori Wanamaker', 'salary': int(dm_20_df.loc['WANAMAKER, LORI M'][" Salary and Other Compensation "].replace(',',''))}
@@ -55,11 +42,13 @@ dm_premier_df['pct_increase'] = dm_premier_df.groupby('name')['salary'].pct_chan
 chart = (
     alt.Chart(dm_premier_df).mark_line(point=True).encode(x=alt.X("date:O", title="Year"), y=alt.Y("salary:Q", title="Salary"), color="name:N")
 )
+st.header("Salaries for Deputy Minister to the Premier")
 st.altair_chart(chart, use_container_width=True)
 dm_premier_df
 
+# ------- CPI INCREASES IN BC ---------------
 annual_cpi_df = pd.read_csv("cpi_annual_averages.csv")
-st.write("BC Annual CPI changes (indexed to 100 for year 2002)")
+st.header("BC Annual CPI changes (indexed to 100 for year 2002)")
 annual_cpi_df
 
 bcgeu_wage_increases_df = pd.read_csv("grid-salary-data/bcgeu_wage_increases.csv")
@@ -77,6 +66,7 @@ bcgeu_wage_increases_df["date"] = pd.to_datetime(bcgeu_wage_increases_df["date"]
 # extract year from "date" column
 bcgeu_wage_increases_df["year"] = bcgeu_wage_increases_df["date"].dt.year
 
+# -------- BCGEU WAGE INCREASES -------------
 st.header("BCGEU Wage Increase History")
 st.table(bcgeu_wage_increases_df)
 
@@ -117,7 +107,7 @@ combined_percentages_charts = alt.layer(*percentages_charts).resolve_scale(y="sh
     )
 st.altair_chart(combined_percentages_charts, use_container_width=True)
 
-# Deputy Minister Salary & Travel Expenses over time (interactive chart)
+# ---------- DEPUTY MINISTER SALARIES, RAISES, TRAVEL EXPENSES vs. INFLATION -------------
 dm_yearly_dfs = {
     2017: dm_17_df,
     2018: dm_18_df,
