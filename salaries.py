@@ -1,5 +1,4 @@
-from cProfile import label
-from math import comb
+from cmath import isnan
 import streamlit as st 
 import pandas as pd
 import altair as alt
@@ -38,13 +37,6 @@ dm_18_df.set_index('Name', inplace=True)
 dm_17_df = pd.read_csv("deputy-ministers-data/fye17-deputy-ministers.csv")
 dm_17_df.set_index('Name', inplace=True)
 
-# display deputy minister data
-st.write('FYE 2025 Deputy Minister & Associate Deputy Minister Salary and Travel Expenses')
-st.table(dm_25_df)
-
-# st.write('FYE 2024 Deputy Minister & Associate Deputy Minister Salary and Travel Expenses')
-# st.table(dm_24_df)
-
 # deputy minister to the premier
 dm_to_premier_salaries = {}
 # Nov 2020 - Nov 2022: Lori Wanamaker
@@ -60,7 +52,6 @@ dm_premier_df = pd.DataFrame([{"date": date, "name": values["name"], "salary": v
 dm_premier_df.sort_values('date')
 dm_premier_df['pct_increase'] = dm_premier_df.groupby('name')['salary'].pct_change() * 100
 
-st.write("Deputy Minister to the Premier - Salary by Year")
 chart = (
     alt.Chart(dm_premier_df).mark_line(point=True).encode(x=alt.X("date:O", title="Year"), y=alt.Y("salary:Q", title="Salary"), color="name:N")
 )
@@ -74,29 +65,57 @@ annual_cpi_df
 bcgeu_wage_increases_df = pd.read_csv("grid-salary-data/bcgeu_wage_increases.csv")
 
 # reshape for purpose of chart
-dm_premier_df_long = dm_premier_df[["date", "pct_increase"]].copy()
-dm_premier_df_long['date'] = pd.to_datetime(dm_premier_df_long['date'], format="%d %b %Y")
-dm_premier_df_long["series"] = "Deputy Minister to the Premier Salaries"
-cpi_df_long = annual_cpi_df[["date", "Annual Percent Change"]].copy()
-cpi_df_long['date'] = pd.to_datetime(cpi_df_long['date'], format="%d %b %Y")
-cpi_df_long = cpi_df_long.rename(columns={'Annual Percent Change': 'pct_increase'})
-cpi_df_long["series"] = "Annual CPI in BC"
-bcgeu_wage_increases_long = bcgeu_wage_increases_df[["date", "pct_increase"]].copy()
-bcgeu_wage_increases_long['date'] = pd.to_datetime(bcgeu_wage_increases_long['date'], format="%d %b %Y")
-bcgeu_wage_increases_long["series"] = "BCGEU Wage Increases"
+dm_premier_df['date'] = pd.to_datetime(dm_premier_df['date'], format="%d %b %Y")
+dm_premier_df['year'] = dm_premier_df['date'].dt.year
 
-combined_df = pd.concat([dm_premier_df_long, cpi_df_long, bcgeu_wage_increases_long])
+annual_cpi_df['date'] = pd.to_datetime(annual_cpi_df['date'], format="%d %b %Y")
+annual_cpi_df['year'] = annual_cpi_df['date'].dt.year
+annual_cpi_df = annual_cpi_df.rename(columns={'Annual Percent Change': 'pct_increase'})
+
+# make sure "date" column is in datetime format
+bcgeu_wage_increases_df["date"] = pd.to_datetime(bcgeu_wage_increases_df["date"], format="%d %b %Y", errors="coerce")
+# extract year from "date" column
+bcgeu_wage_increases_df["year"] = bcgeu_wage_increases_df["date"].dt.year
+
+st.header("BCGEU Wage Increase History")
+st.table(bcgeu_wage_increases_df)
+
+st.header("Year-over-Year Inflation in BC vs. BCGEU Wage Increases vs. Deputy Minister to the Premier Wage Increases")
+
 chart = (
-    alt.Chart(combined_df)
+    alt.Chart(dm_premier_df)
     .mark_line(point=True)
     .encode(
-        x=alt.X("date:T", title="Date", axis=alt.Axis(format="%b %Y")),  # e.g. "Jan 2021"
+        x=alt.X("year:O", title="Year"),
         y=alt.Y("pct_increase:Q", title="Percent Change"),
-        color="series:N",
-        tooltip=["series:N", alt.Tooltip("date:T", format="%d %b %Y"), alt.Tooltip("pct_increase:Q", format=".2f")]
+        tooltip=[alt.Tooltip("year:O"), alt.Tooltip("pct_increase:Q", title="DM to the Premier Wage Increase (%)", format=".2f")]
     )
 )
-st.altair_chart(chart, use_container_width=True)
+cpi_chart = (
+    alt.Chart(annual_cpi_df)
+    .mark_tick(color="black", thickness=2)
+    .encode(
+        x=alt.X("year:O"),
+        y=alt.Y("pct_increase:Q"),
+        tooltip=[alt.Tooltip("year:O"), alt.Tooltip("pct_increase:Q", title="CPI Increase (%) in BC", format=".1f")]
+    )
+)
+bcgeu_inc_chart = (
+    alt.Chart(bcgeu_wage_increases_df)
+    .mark_bar()
+    .encode(
+        x=alt.X("year:O", title="Year"),
+        y=alt.Y("pct_increase:Q", stack="zero"),
+        color=alt.value("#ff7f0e"),
+        tooltip=[alt.Tooltip("date:T"), alt.Tooltip("pct_increase:Q", title="Wage Increase (%)", format=".1f")]
+    )
+)
+percentages_charts = [chart, bcgeu_inc_chart, cpi_chart]
+combined_percentages_charts = alt.layer(*percentages_charts).resolve_scale(y="shared").properties(
+        width="container",  # let width flex to container
+        height=400          # fixed height in pixels
+    )
+st.altair_chart(combined_percentages_charts, use_container_width=True)
 
 # Deputy Minister Salary & Travel Expenses over time (interactive chart)
 dm_yearly_dfs = {
@@ -119,6 +138,7 @@ for year, df in dm_yearly_dfs.items():
 combined_df = pd.concat(all_years, ignore_index=True)
 combined_df = combined_df.rename(columns={" Salary and Other Compensation ": "Salary", " Travel": "Travel"})
 combined_df = combined_df.dropna(subset=["Name"]) # drop rows where value of Name is null
+combined_df = combined_df[combined_df["Name"] != "Grand Total"] # drop rows where value of Name is "Grantd Total"
 combined_df["Name_clean"] = (
     combined_df["Name"]
     .str.strip()
@@ -159,11 +179,6 @@ metric = st.radio(
     options=["Salary", "Travel"],
     horizontal=True
 )
-# give user option of also plotting BC inflation if metric is "salary"
-if metric == "Salary":
-    show_inflation = st.toggle(
-        "Plot inflation"
-    )
 # let user select 1 or more names
 names = st.multiselect(
     "Select name(s)",
@@ -181,53 +196,65 @@ else:
         .mark_line(point=True)
         .encode(
             x=alt.X("Year:O", sort=sorted(combined_df["Year"].unique()), title="Year"),
-            y=alt.Y(f"{metric}:Q", title=metric, axis=alt.Axis(format="$,.0f")), # format axis for currency
-            color="Name_clean:N",
+            y=alt.Y(f"{metric}:Q", title=metric, axis=alt.Axis(format="$,.0f"), scale=alt.Scale(domain=[0, filtered[metric].max()])), # format axis for currency
+            color=alt.Color("Name_clean:N", legend=alt.Legend(title="Name")),
             tooltip=["Name:N", alt.Tooltip("Year:O"), alt.Tooltip(f"{metric}:Q", format="$,.0f")]
         )
     )
     charts.append(line_chart)
     if metric == "Salary":
+        filtered_inflation_df = annual_cpi_df.copy()
+        filtered_inflation_df = filtered_inflation_df.rename(
+            columns={"pct_increase": "PercentChange"}
+        )
+        filtered_inflation_df["date"] = pd.to_datetime(filtered_inflation_df["date"], errors="coerce")
+        filtered_inflation_df["Year"] = filtered_inflation_df["date"].dt.year
+        filtered_inflation_df = filtered_inflation_df[filtered_inflation_df["Year"] > 2016]
+        
         # ----------------- shared y-axis for percentages ----------------
-        percent_y = alt.Y("PercentChange:Q", title="Percent Change", axis=alt.Axis(format=".1f"), scale=alt.Scale(domain=(0, 30)))
+        max_y = max(filtered["pct_increase_salary"].max(), filtered_inflation_df["PercentChange"].max())
+        if isnan(max_y):
+            max_y = 30
+        percent_y = alt.Y("PercentChange:Q", stack=False, title="Percent Change", axis=alt.Axis(format=".1f"), scale=alt.Scale(domain=[0, max_y]))
         
         salary_increase_bar_chart = (
             alt.Chart(filtered.assign(PercentChange=filtered["pct_increase_salary"]))
-            .mark_bar(opacity=0.5)
+            .mark_bar(opacity=0.7)
             .encode(
-                x=alt.X("Year:O", sort=sorted(combined_df["Year"].unique())),
+                x=alt.X("Year:N", title="Year"),
+                xOffset="Name_clean:N",   # 👈 this puts bars side-by-side
                 y=percent_y,
                 color="Name_clean:N",
-                tooltip=["Name:N", alt.Tooltip("Year:O"), alt.Tooltip("PercentChange:Q", format=".1f")]
+                tooltip=[
+                    alt.Tooltip("Name_clean:N", title="Name"),
+                    alt.Tooltip("Year:O", title="Year"),
+                    alt.Tooltip("PercentChange:Q", title="Salary Increase (%)", format=".1f")
+                ]
             )
         )
-        charts.append(salary_increase_bar_chart)
-        if show_inflation:
-            # inflation as dashed black line
-            filtered_inflation_df = annual_cpi_df.copy()
-            filtered_inflation_df = filtered_inflation_df.rename(
-                columns={"Annual Percent Change": "PercentChange"}
-            )
-            filtered_inflation_df["date"] = pd.to_datetime(filtered_inflation_df["date"], errors="coerce")
-            filtered_inflation_df["Year"] = filtered_inflation_df["date"].dt.year
-            filtered_inflation_df = filtered_inflation_df[filtered_inflation_df["Year"] > 2016]
 
-            inflation_chart = (
-                alt.Chart(filtered_inflation_df)
-                .mark_tick(color="black", thickness=3)
-                .encode(
-                    x=alt.X("Year:O"),
-                    y=percent_y,
-                    tooltip=[
-                        alt.Tooltip("Year:O"),
-                        alt.Tooltip("PercentChange:Q", title="CPI increase in BC", format=".1f")
-                    ]
-                )
+        charts.append(salary_increase_bar_chart)
+        
+        # inflation as dashed black line
+        inflation_chart = (
+            alt.Chart(filtered_inflation_df)
+            .mark_tick(color="black", thickness=3)
+            .encode(
+                x=alt.X("Year:O"),
+                y=percent_y,
+                tooltip=[
+                    alt.Tooltip("Year:O"),
+                    alt.Tooltip("PercentChange:Q", title="CPI increase in BC", format=".1f")
+                ]
             )
-            charts.append(inflation_chart)
+        )
+        charts.append(inflation_chart)
 
     # combine all charts, share same y-axis when comparing percentages
-    combined_chart = alt.layer(*charts).resolve_scale(y="independent")
+    combined_chart = alt.layer(*charts).resolve_scale(y="independent").properties(
+        width="container",  # let width flex to container
+        height=400          # fixed height in pixels
+    )
     st.altair_chart(combined_chart, use_container_width=True)
 
 
